@@ -2,15 +2,18 @@ services:
   my_web:
     user: ${MY_UID}:${MY_GID}
     build:
-      context: ./build
-      dockerfile: Dockerfile.php
+      context: .  # Cambia: contesto = radice progetto
+      dockerfile: build/Dockerfile.php
       args:
         UID: ${MY_UID}
-        GID: ${MY_GID}      
+        GID: ${MY_GID}
     ports:
       - 8080:80
     volumes:
       - "./php:/var/www/html"
+      - "./php/public:/var/www/html/public"
+    depends_on:
+      - my_mariadb
 
   my_mariadb:
     user: ${MY_UID}:${MY_GID}
@@ -22,10 +25,12 @@ services:
         GID: ${MY_GID}
     environment:
       - MARIADB_ROOT_PASSWORD=ciccio
-      - MARIADB_DATABASE=scuola
+      - MARIADB_DATABASE=banking
     volumes:
       - "./mysql:/var/lib/mysql"
-      - "./build/init.sql:/docker-entrypoint-initdb.d/init.sql"
+      - "./init:/docker-entrypoint-initdb.d"
+    ports:
+      - 3306:3306
 
   my_phpMyAdmin:
     image: phpmyadmin
@@ -33,6 +38,8 @@ services:
       - 8081:80
     environment:
       - PMA_HOST=my_mariadb
+    depends_on:
+      - my_mariadb
 
   my_node:
     user: ${MY_UID}:${MY_GID}
