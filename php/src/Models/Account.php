@@ -24,4 +24,5 @@ class Account
         $stmt->execute();
         return $mysqli->insert_id;
     }
+    
 }

@@ -59,7 +59,6 @@ class BankingController
         $accountId = (int)$args['id'];
         $data = $request->getParsedBody();
         
-        // Validazioni
         if (!isset($data['amount']) || !is_numeric($data['amount']) || $data['amount'] <= 0) {
             return $this->errorResponse($response, 'Amount must be greater than zero', 400);
         }
@@ -90,7 +89,6 @@ class BankingController
         $accountId = (int)$args['id'];
         $data = $request->getParsedBody();
         
-        // Validazioni
         if (!isset($data['amount']) || !is_numeric($data['amount']) || $data['amount'] <= 0) {
             return $this->errorResponse($response, 'Amount must be greater than zero', 400);
         }
@@ -130,6 +128,7 @@ class BankingController
             return $this->errorResponse($response, 'Account not found', 404);
         }
         
+    
         $balance = Transaction::getBalance($accountId);
         
         return $this->jsonResponse($response, [
@@ -144,24 +143,20 @@ class BankingController
         $transactionId = (int)$args['tid'];
         $data = $request->getParsedBody();
         
-        // Validazione: description obbligatoria
         if (empty($data['description'])) {
             return $this->errorResponse($response, 'Description is required', 400);
         }
         
-        // Verifica che l'account esista
         $account = Account::find($accountId);
         if (!$account) {
             return $this->errorResponse($response, 'Account not found', 404);
         }
         
-        // Verifica che il movimento esista e appartenga all'account
         $transaction = Transaction::findById($transactionId, $accountId);
         if (!$transaction) {
             return $this->errorResponse($response, 'Transaction not found', 404);
         }
         
-        // Aggiorna la descrizione
         $description = htmlspecialchars($data['description']);
         $updated = Transaction::updateDescription($transactionId, $accountId, $description);
         
@@ -181,19 +176,16 @@ class BankingController
         $accountId = (int)$args['id'];
         $transactionId = (int)$args['tid'];
         
-        // Verifica che l'account esista
         $account = Account::find($accountId);
         if (!$account) {
             return $this->errorResponse($response, 'Account not found', 404);
         }
         
-        // Verifica che il movimento esista e appartenga all'account
         $transaction = Transaction::findById($transactionId, $accountId);
         if (!$transaction) {
             return $this->errorResponse($response, 'Transaction not found', 404);
         }
         
-        // REGOLA DI BUSINESS: si può eliminare solo l'ultimo movimento
         $lastTransaction = Transaction::getLastTransaction($accountId);
         
         if (!$lastTransaction || $lastTransaction['id'] != $transactionId) {
@@ -203,14 +195,12 @@ class BankingController
             );
         }
         
-        // Elimina il movimento
         $deleted = Transaction::deleteTransaction($transactionId, $accountId);
         
         if (!$deleted) {
             return $this->errorResponse($response, 'Failed to delete transaction', 500);
         }
         
-        // Calcola il nuovo saldo (opzionale, ma utile)
         $newBalance = Transaction::getBalance($accountId);
         
         return $this->jsonResponse($response, [
@@ -226,12 +216,10 @@ class BankingController
         $params = $request->getQueryParams();
         $to = strtoupper($params['to'] ?? '');
         
-        // Validazione: valuta target obbligatoria
         if (!$to) {
             return $this->errorResponse($response, 'Missing target currency', 400);
         }
         
-        // Verifica che l'account esista
         $account = Account::find($accountId);
         if (!$account) {
             return $this->errorResponse($response, 'Account not found', 404);
@@ -240,7 +228,6 @@ class BankingController
         $from = strtoupper($account['currency']);
         $balance = Transaction::getBalance($accountId);
         
-        // Chiamata a Frankfurter API
         $client = new \GuzzleHttp\Client();
         $url = "https://api.frankfurter.dev/v1/latest?base={$from}&symbols={$to}";
         
@@ -270,7 +257,7 @@ class BankingController
         } catch (\GuzzleHttp\Exception\ConnectException $e) {
             return $this->errorResponse($response, 'External exchange API unavailable', 502);
         } catch (\Exception $e) {
-            return $this->errorResponse($response, 'Error fetching exchange rate', 500);
+            return $this->errorResponse($response, 'Error fetching exchange rate', 422);
         }
     }
 
@@ -280,12 +267,10 @@ class BankingController
         $params = $request->getQueryParams();
         $to = strtoupper($params['to'] ?? '');
         
-        // Validazione: crypto target obbligatoria
         if (!$to) {
             return $this->errorResponse($response, 'Missing target cryptocurrency', 400);
         }
         
-        // Verifica che l'account esista
         $account = Account::find($accountId);
         if (!$account) {
             return $this->errorResponse($response, 'Account not found', 404);
@@ -294,10 +279,8 @@ class BankingController
         $from = strtoupper($account['currency']);
         $balance = Transaction::getBalance($accountId);
         
-        // Costruisci il simbolo di mercato (es: BTCEUR, ETHUSD)
         $marketSymbol = $to . $from;
         
-        // Chiamata a Binance API per ottenere il prezzo corrente
         $client = new \GuzzleHttp\Client();
         $url = "https://api.binance.com/api/v3/ticker/price?symbol={$marketSymbol}";
         
@@ -312,7 +295,6 @@ class BankingController
             $price = (float)$data['price'];
             $convertedAmount = $balance / $price;
             
-            // Arrotonda a 8 decimali per le crypto
             $convertedAmount = round($convertedAmount, 8);
             
             return $this->jsonResponse($response, [
@@ -328,11 +310,10 @@ class BankingController
             ]);
             
         } catch (\GuzzleHttp\Exception\ClientException $e) {
-            // Errore 404 significa che la coppia non esiste
             if ($e->getCode() == 404) {
                 return $this->errorResponse($response, "Trading pair {$marketSymbol} not found on Binance", 400);
             }
-            return $this->errorResponse($response, 'Binance API error', 502);
+            return $this->errorResponse($response, 'Binance API error', 422);
         } catch (\GuzzleHttp\Exception\ConnectException $e) {
             return $this->errorResponse($response, 'Binance API unavailable', 502);
         } catch (\Exception $e) {
