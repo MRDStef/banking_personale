@@ -1,6 +1,6 @@
 FROM node:20.14.0
-ARG UID
-ARG GID
+ARG UID=1000
+ARG GID=1000
 EXPOSE 3000
 ADD build/entrypoint-node.sh /entrypoint-node.sh
 RUN groupadd -f informatica -g$GID
